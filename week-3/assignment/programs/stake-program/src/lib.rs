@@ -23,7 +23,7 @@ pub mod stake_program {
         instructions::stake(ctx, amount)
     }
 
-    pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
-        instructions::unstake(ctx)
+    pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
+        instructions::unstake(ctx, amount)
     }
 }

@@ -12,7 +12,9 @@ import {
   getAssociatedTokenAddressSync,
   getMinimumBalanceForRentExemptMint,
 } from "@solana/spl-token";
-import { expect } from "chai";
+import { assert, expect } from "chai";
+
+const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 describe("stake-program", () => {
   // Configure the client to use the local cluster.
@@ -185,7 +187,84 @@ describe("stake-program", () => {
     expect(vaultAccount.amount.toString()).to.equal(String(100 * 10 ** 6));
   });
 
-  it("Unstake successfully", async () => {
+  // it("Unstake successfully", async () => {
+  //   await delay(5000);
+  //   const stakeAmount = new BN(100 * 10 ** 6);
+  //   // mint reward token to reward vault
+  //   const mintTx = new anchor.web3.Transaction();
+
+  //   const mintToRewardVaultIx = createMintToInstruction(
+  //     usdcMintKp.publicKey,
+  //     rewardVault,
+  //     provider.publicKey,
+  //     1000 * 10 ** 6,
+  //     []
+  //   );
+
+  //   mintTx.add(mintToRewardVaultIx);
+
+  //   await provider.sendAndConfirm(mintTx);
+
+  //   const vaultTokenAccount = getAssociatedTokenAddressSync(
+  //     usdcMintKp.publicKey,
+  //     stakeInfo,
+  //     true
+  //   );
+
+  //   const tx = await program.methods
+  //     .unstake(stakeAmount)
+  //     .accounts({
+  //       staker: staker.publicKey,
+  //       mint: usdcMintKp.publicKey,
+  //       stakeInfo: stakeInfo,
+  //       vaultTokenAccount: vaultTokenAccount,
+  //       rewardVault: rewardVault,
+  //       stakerTokenAccount: stakerTokenAccount,
+  //       systemProgram: anchor.web3.SystemProgram.programId,
+  //       tokenProgram: TOKEN_PROGRAM_ID,
+  //       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+  //     })
+  //     .signers([staker])
+  //     .rpc();
+
+  //   console.log("Your transaction signature", tx);
+
+  //   try {
+  //     await program.account.stakeInfo.fetch(stakeInfo);
+  //   } catch (error) {
+  //     assert.strictEqual(
+  //       error.message,
+  //       `Account does not exist or has no data ${stakeInfo.toBase58()}`
+  //     );
+  //   }
+
+  //   const stakerAccount = await getAccount(
+  //     provider.connection,
+  //     stakerTokenAccount
+  //   );
+
+  //   const rewardVaultAccount = await getAccount(
+  //     provider.connection,
+  //     rewardVault
+  //   );
+  //   try {
+  //     const vaultAccount = await getAccount(
+  //       provider.connection,
+  //       vaultTokenAccount
+  //     );
+  //     expect(Number(vaultAccount.amount)).to.equal(0);
+  //   } catch (error) {
+  //     assert.strictEqual(error.message, ``);
+  //   }
+
+  //   expect(Number(stakerAccount.amount)).to.greaterThan(1000 * 10 ** 6);
+
+  //   expect(Number(rewardVaultAccount.amount)).to.lessThan(1000 * 10 ** 6);
+  // });
+
+  it("Unstake portion of USDT successfully", async () => {
+    await delay(5000);
+    const stakeAmount = new BN(100 * 10 ** 6);
     // mint reward token to reward vault
     const mintTx = new anchor.web3.Transaction();
 
@@ -206,9 +285,10 @@ describe("stake-program", () => {
       stakeInfo,
       true
     );
-
-    const tx = await program.methods
-      .unstake()
+    const unstakeAmount1 = stakeAmount.mul(new BN(30)).div(new BN(100));
+    const unstakeAmount2 = stakeAmount.mul(new BN(70)).div(new BN(100));
+    let tx = await program.methods
+      .unstake(unstakeAmount1)
       .accounts({
         staker: staker.publicKey,
         mint: usdcMintKp.publicKey,
@@ -227,8 +307,51 @@ describe("stake-program", () => {
 
     const stakeInfoAccount = await program.account.stakeInfo.fetch(stakeInfo);
 
-    expect(stakeInfoAccount.isStaked).to.equal(false);
-    expect(Number(stakeInfoAccount.amount)).to.equal(0);
+    expect(stakeInfoAccount.isStaked).to.equal(true);
+    expect(Number(stakeInfoAccount.amount)).to.equal(unstakeAmount2.toNumber());
+
+    const vaultAccount = await getAccount(
+      provider.connection,
+      vaultTokenAccount
+    );
+    expect(Number(vaultAccount.amount)).to.equal(Number(unstakeAmount2));
+
+    tx = await program.methods
+      .unstake(unstakeAmount2)
+      .accounts({
+        staker: staker.publicKey,
+        mint: usdcMintKp.publicKey,
+        stakeInfo: stakeInfo,
+        vaultTokenAccount: vaultTokenAccount,
+        rewardVault: rewardVault,
+        stakerTokenAccount: stakerTokenAccount,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      })
+      .signers([staker])
+      .rpc();
+
+    console.log("Your transaction signature", tx);
+
+    try {
+      await program.account.stakeInfo.fetch(stakeInfo);
+    } catch (error) {
+      assert.strictEqual(
+        error.message,
+        `Account does not exist or has no data ${stakeInfo.toBase58()}`
+      );
+    }
+
+    try {
+      const vaultAccount = await getAccount(
+        provider.connection,
+        vaultTokenAccount
+      );
+      expect(Number(vaultAccount.amount)).to.equal(0);
+    } catch (error) {
+      assert.strictEqual(error.message, ``);
+    }
 
     const stakerAccount = await getAccount(
       provider.connection,
@@ -239,14 +362,8 @@ describe("stake-program", () => {
       provider.connection,
       rewardVault
     );
-
-    const vaultAccount = await getAccount(
-      provider.connection,
-      vaultTokenAccount
-    );
-
     expect(Number(stakerAccount.amount)).to.greaterThan(1000 * 10 ** 6);
-    expect(Number(vaultAccount.amount)).to.equal(0);
+
     expect(Number(rewardVaultAccount.amount)).to.lessThan(1000 * 10 ** 6);
   });
 });

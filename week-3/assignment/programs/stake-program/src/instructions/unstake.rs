@@ -48,12 +48,17 @@ pub struct Unstake<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
-pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
+pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
     let stake_info = &ctx.accounts.stake_info;
 
     if !stake_info.is_staked {
         return Err(AppError::NotStaked.into());
     }
+
+    require!(
+        amount.gt(&0) && amount.le(&stake_info.amount),
+        AppError::InvalidAmount
+    );
 
     let clock = Clock::get()?;
 
@@ -61,27 +66,32 @@ pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
 
     let stake_amount = stake_info.amount;
 
-    let reward = slot_passed
-        .checked_mul(10u64.pow(ctx.accounts.mint.decimals as u32))
+    let reward_per_slot = stake_amount
+        .checked_mul(100)
+        .and_then(|x| x.checked_div(10_000))
         .unwrap();
+
+    let reward = slot_passed.checked_mul(reward_per_slot).unwrap();
 
     msg!("reward: {}", reward);
 
-    // transfer reward to staker
-    let reward_vault_bump = ctx.bumps.reward_vault;
-    let reward_vault_signer_seeds: &[&[&[u8]]] = &[&[REWARD_VAULT_SEED, &[reward_vault_bump]]];
-    transfer(
-        CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            Transfer {
-                from: ctx.accounts.reward_vault.to_account_info(),
-                to: ctx.accounts.staker_token_account.to_account_info(),
-                authority: ctx.accounts.reward_vault.to_account_info(),
-            },
-            reward_vault_signer_seeds,
-        ),
-        reward,
-    )?;
+    if reward.gt(&0) {
+        // transfer reward to staker
+        let reward_vault_bump = ctx.bumps.reward_vault;
+        let reward_vault_signer_seeds: &[&[&[u8]]] = &[&[REWARD_VAULT_SEED, &[reward_vault_bump]]];
+        transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.reward_vault.to_account_info(),
+                    to: ctx.accounts.staker_token_account.to_account_info(),
+                    authority: ctx.accounts.reward_vault.to_account_info(),
+                },
+                reward_vault_signer_seeds,
+            ),
+            reward,
+        )?;
+    }
 
     // transfer token to vault
     let stake_info_bump = ctx.bumps.stake_info;
@@ -99,15 +109,33 @@ pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
             },
             stake_info_signer_seeds,
         ),
-        stake_amount,
+        amount,
     )?;
 
     // update stake_info
     let stake_info = &mut ctx.accounts.stake_info;
 
     stake_info.stake_at = clock.slot;
-    stake_info.is_staked = false;
-    stake_info.amount = 0;
+    stake_info.amount = stake_info.amount.checked_sub(amount).unwrap();
+
+    if stake_info.amount.eq(&0) {
+        stake_info.is_staked = false;
+        // close vault_token_account
+        anchor_spl::token::close_account(CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            anchor_spl::token::CloseAccount {
+                account: ctx.accounts.vault_token_account.to_account_info(),
+                destination: ctx.accounts.staker.to_account_info(),
+                authority: ctx.accounts.stake_info.to_account_info(),
+            },
+            stake_info_signer_seeds,
+        ))?;
+
+        // close stake_info account
+        ctx.accounts
+            .stake_info
+            .close(ctx.accounts.staker.to_account_info())?;
+    }
 
     Ok(())
 }

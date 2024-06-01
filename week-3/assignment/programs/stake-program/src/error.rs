@@ -10,4 +10,7 @@ pub enum AppError {
 
     #[msg("No tokens to stake")]
     NoToken,
+
+    #[msg("Invalid amount")]
+    InvalidAmount,
 }
