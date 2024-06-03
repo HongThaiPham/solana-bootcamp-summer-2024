@@ -21,31 +21,140 @@ const PROGRAM_ID = new web3.PublicKey(
   "8mNgdh9mDsW14UYNbk9kTZbrycMfwFRy9hKTRVQ4hPvD"
 );
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"));
+const signer = new Wallet(SIGNER_WALLET);
+console.log("Signer wallet address: ", signer.publicKey.toBase58());
+const provider = new AnchorProvider(connection, signer, {
+  preflightCommitment: "confirmed",
+});
+
+const program = new Program(
+  idl as unknown as StakeProgram,
+  PROGRAM_ID,
+  provider
+);
 let tx;
 async function main() {
-  const signer = new Wallet(SIGNER_WALLET);
-  console.log("Signer wallet address: ", signer.publicKey.toBase58());
-  const provider = new AnchorProvider(connection, signer, {
-    preflightCommitment: "confirmed",
-  });
-
-  const program = new Program(
-    idl as unknown as StakeProgram,
-    PROGRAM_ID,
-    provider
-  );
-
   //await createNewToken();
-  const token1 = await createNewToken();
-  const fakeToken1 = await getMint(connection, token1);
 
-  console.log("Fake token 1: ", fakeToken1.address.toBase58());
+  await runToken2();
+}
 
+async function runToken2() {
   const token2 = await createNewToken();
   const fakeToken2 = await getMint(connection, token2);
 
   console.log("Fake token 2: ", fakeToken2.address.toBase58());
+  const [rewardVault1] = web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("reward"), fakeToken2.address.toBuffer()],
+    program.programId
+  );
 
+  const stakeAmount = new BN(100 * 10 ** 9);
+  const unstakeAmount1 = stakeAmount.mul(new BN(30)).div(new BN(100));
+  const unstakeAmount2 = stakeAmount.mul(new BN(70)).div(new BN(100));
+  // init program
+
+  let tx = await program.methods
+    .initialize()
+    .accounts({
+      admin: provider.publicKey,
+      rewardVault: rewardVault1,
+      mint: fakeToken2.address,
+      systemProgram: web3.SystemProgram.programId,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .rpc();
+
+  console.log("Init token 2 tx: ", tx);
+
+  // mint to reawrd vault token account
+  const [stakeInfo1] = web3.PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("stake_info"),
+      SIGNER_WALLET.publicKey.toBytes(),
+      fakeToken2.address.toBuffer(),
+    ],
+    program.programId
+  );
+  const vaultToken1Account = await getOrCreateAssociatedTokenAccount(
+    connection,
+    SIGNER_WALLET,
+    fakeToken2.address,
+    stakeInfo1,
+    true
+  );
+  await mintTo(
+    connection,
+    SIGNER_WALLET,
+    fakeToken2.address,
+    rewardVault1,
+    SIGNER_WALLET.publicKey,
+    1000000000 * 10 ** 9
+  );
+
+  const stakerToken1Account = getAssociatedTokenAddressSync(
+    fakeToken2.address,
+    signer.publicKey
+  );
+
+  tx = await program.methods
+    .stake(stakeAmount)
+    .accounts({
+      staker: SIGNER_WALLET.publicKey,
+      mint: fakeToken2.address,
+      stakeInfo: stakeInfo1,
+      vaultTokenAccount: vaultToken1Account.address,
+      stakerTokenAccount: stakerToken1Account,
+      systemProgram: web3.SystemProgram.programId,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+    })
+    .rpc();
+
+  console.log("Stake token 2 tx: ", tx);
+
+  // unstake token 30%
+  tx = await program.methods
+    .unstake(unstakeAmount1)
+    .accounts({
+      staker: signer.publicKey,
+      mint: fakeToken2.address,
+      stakeInfo: stakeInfo1,
+      vaultTokenAccount: vaultToken1Account.address,
+      rewardVault: rewardVault1,
+      stakerTokenAccount: stakerToken1Account,
+      systemProgram: web3.SystemProgram.programId,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+    })
+    .rpc();
+
+  console.log("Unstake 30% token 1 tx: ", tx);
+
+  // unstake token 70%
+  tx = await program.methods
+    .unstake(unstakeAmount2)
+    .accounts({
+      staker: signer.publicKey,
+      mint: fakeToken2.address,
+      stakeInfo: stakeInfo1,
+      vaultTokenAccount: vaultToken1Account.address,
+      rewardVault: rewardVault1,
+      stakerTokenAccount: stakerToken1Account,
+      systemProgram: web3.SystemProgram.programId,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+    })
+    .rpc();
+
+  console.log("Unstake 70% token 2 tx: ", tx);
+}
+
+async function runToken1() {
+  const token1 = await createNewToken();
+  const fakeToken1 = await getMint(connection, token1);
+
+  console.log("Fake token 1: ", fakeToken1.address.toBase58());
   const [rewardVault1] = web3.PublicKey.findProgramAddressSync(
     [Buffer.from("reward"), fakeToken1.address.toBuffer()],
     program.programId
