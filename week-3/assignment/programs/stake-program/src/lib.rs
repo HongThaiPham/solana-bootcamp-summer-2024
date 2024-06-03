@@ -9,7 +9,7 @@ pub use constants::*;
 use instructions::*;
 pub use state::*;
 
-declare_id!("AwYfSPuTrPsoNYF2wCkkiCnPWwigCAqU1CEfJ7EoAR56");
+declare_id!("8mNgdh9mDsW14UYNbk9kTZbrycMfwFRy9hKTRVQ4hPvD");
 
 #[program]
 pub mod stake_program {

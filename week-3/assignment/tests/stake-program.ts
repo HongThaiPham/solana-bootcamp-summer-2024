@@ -101,7 +101,7 @@ describe("stake-program", () => {
     }
 
     rewardVault = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("reward")],
+      [Buffer.from("reward"), usdcMintKp.publicKey.toBuffer()],
       program.programId
     )[0];
   });
@@ -133,7 +133,11 @@ describe("stake-program", () => {
 
   it("Stake successfully", async () => {
     stakeInfo = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("stake_info"), staker.publicKey.toBytes()],
+      [
+        Buffer.from("stake_info"),
+        staker.publicKey.toBytes(),
+        usdcMintKp.publicKey.toBuffer(),
+      ],
       program.programId
     )[0];
 
