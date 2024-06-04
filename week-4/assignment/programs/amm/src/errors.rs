@@ -16,4 +16,7 @@ pub enum AppError {
 
     #[msg("Invariant violated")]
     InvariantViolated,
+
+    #[msg("No deposited")]
+    NoDeposited,
 }

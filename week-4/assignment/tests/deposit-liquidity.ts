@@ -7,7 +7,12 @@ import {
   TOKEN_PROGRAM_ID,
 } from "@coral-xyz/anchor/dist/cjs/utils/token";
 import { mintToken } from "./utils";
-import { getAccount, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import {
+  getAccount,
+  getAssociatedTokenAddressSync,
+  getOrCreateAssociatedTokenAccount,
+  mintTo,
+} from "@solana/spl-token";
 import { BN } from "bn.js";
 
 // @ts-ignore
@@ -33,6 +38,7 @@ describe("deposit-liquidity", () => {
   const program = anchor.workspace.Amm as Program<Amm>;
 
   const depositor = anchor.web3.Keypair.generate();
+  const depositor2 = anchor.web3.Keypair.generate();
   let id: anchor.web3.PublicKey;
   let fee = 100;
 
@@ -55,10 +61,21 @@ describe("deposit-liquidity", () => {
   let depisitorMintBAccount: anchor.web3.PublicKey;
   let depisitorLPAccount: anchor.web3.PublicKey;
 
+  let depisitor2MintAAccount: anchor.web3.PublicKey;
+  let depisitor2MintBAccount: anchor.web3.PublicKey;
+  let depisitor2LPAccount: anchor.web3.PublicKey;
+
   before(async () => {
     await provider.connection.confirmTransaction(
       await provider.connection.requestAirdrop(
         depositor.publicKey,
+        anchor.web3.LAMPORTS_PER_SOL * 2
+      )
+    );
+
+    await provider.connection.confirmTransaction(
+      await provider.connection.requestAirdrop(
+        depositor2.publicKey,
         anchor.web3.LAMPORTS_PER_SOL * 2
       )
     );
@@ -101,6 +118,40 @@ describe("deposit-liquidity", () => {
       decimals: mintBDecimals,
       amount: 20000,
     });
+
+    // add another depositor
+
+    await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      depositor2,
+      mintAKp.publicKey,
+      depositor2.publicKey
+    );
+
+    await mintTo(
+      provider.connection,
+      depositor,
+      mintAKp.publicKey,
+      getAssociatedTokenAddressSync(mintAKp.publicKey, depositor2.publicKey),
+      depositor,
+      10000 * 10 ** mintADecimals
+    );
+
+    await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      depositor2,
+      mintBKp.publicKey,
+      depositor2.publicKey
+    );
+
+    await mintTo(
+      provider.connection,
+      depositor,
+      mintBKp.publicKey,
+      getAssociatedTokenAddressSync(mintBKp.publicKey, depositor2.publicKey),
+      depositor,
+      20000 * 10 ** mintBDecimals
+    );
 
     poolPda = anchor.web3.PublicKey.findProgramAddressSync(
       [
@@ -180,6 +231,24 @@ describe("deposit-liquidity", () => {
       depositor.publicKey,
       false
     );
+
+    depisitor2LPAccount = getAssociatedTokenAddressSync(
+      mintLiquidityPda,
+      depositor2.publicKey,
+      true
+    );
+
+    depisitor2MintAAccount = getAssociatedTokenAddressSync(
+      mintAKp.publicKey,
+      depositor2.publicKey,
+      false
+    );
+
+    depisitor2MintBAccount = getAssociatedTokenAddressSync(
+      mintBKp.publicKey,
+      depositor2.publicKey,
+      false
+    );
   });
 
   it("deposit-liquidity - 1", async () => {
@@ -241,8 +310,8 @@ describe("deposit-liquidity", () => {
   });
 
   it("deposit-liquidity - 2", async () => {
-    const amountA = new BN(10 * 10 ** mintADecimals);
-    const amountB = new BN(30 * 10 ** mintBDecimals);
+    const amountA = new BN(100 * 10 ** mintADecimals);
+    const amountB = new BN(300 * 10 ** mintBDecimals);
 
     const tx = await program.methods
       .depositLiquidity(amountA, amountB)
@@ -264,6 +333,95 @@ describe("deposit-liquidity", () => {
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .signers([depositor])
+      .rpc();
+
+    console.log("Your transaction signature", tx);
+  });
+
+  it("deposit-liquidity - 3", async () => {
+    const amountA = new BN(100 * 10 ** mintADecimals);
+    const amountB = new BN(200 * 10 ** mintBDecimals);
+
+    const tx = await program.methods
+      .depositLiquidity(amountA, amountB)
+      .accounts({
+        pool: poolPda,
+        poolAuthority: poolAuthorityPda,
+        mintLiquidity: mintLiquidityPda,
+        mintA: mintAKp.publicKey,
+        mintB: mintBKp.publicKey,
+        poolAccountA: poolAccountA,
+        poolAccountB: poolAccountB,
+        depositorAccountLiquidity: depisitor2LPAccount,
+        depositorAccountA: depisitor2MintAAccount,
+        depositorAccountB: depisitor2MintBAccount,
+        depositor: depositor2.publicKey,
+
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([depositor2])
+      .rpc();
+
+    console.log("Your transaction signature", tx);
+  });
+
+  it("withdraw-liquidity - 1", async () => {
+    const depisitorLP = await getAccount(
+      provider.connection,
+      depisitorLPAccount
+    );
+    assert(depisitorLP.amount > 0, "Correct LP");
+    const tx = await program.methods
+      .withdrawLiquidity(new BN(depisitorLP.amount.toString()))
+      .accounts({
+        pool: poolPda,
+        poolAuthority: poolAuthorityPda,
+        mintLiquidity: mintLiquidityPda,
+        mintA: mintAKp.publicKey,
+        mintB: mintBKp.publicKey,
+        poolAccountA: poolAccountA,
+        poolAccountB: poolAccountB,
+        depositorAccountLiquidity: depisitorLPAccount,
+        depositorAccountA: depisitorMintAAccount,
+        depositorAccountB: depisitorMintBAccount,
+        depositor: depositor.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([depositor])
+      .rpc();
+
+    console.log("Your transaction signature", tx);
+  });
+
+  it("withdraw-liquidity - 2", async () => {
+    const depisitor2LP = await getAccount(
+      provider.connection,
+      depisitor2LPAccount
+    );
+    assert(depisitor2LP.amount > 0, "Correct LP");
+    const tx = await program.methods
+      .withdrawLiquidity(new BN(depisitor2LP.amount.toString()))
+      .accounts({
+        pool: poolPda,
+        poolAuthority: poolAuthorityPda,
+        mintLiquidity: mintLiquidityPda,
+        mintA: mintAKp.publicKey,
+        mintB: mintBKp.publicKey,
+        poolAccountA: poolAccountA,
+        poolAccountB: poolAccountB,
+        depositorAccountLiquidity: depisitor2LPAccount,
+        depositorAccountA: depisitor2MintAAccount,
+        depositorAccountB: depisitor2MintBAccount,
+        depositor: depositor2.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([depositor2])
       .rpc();
 
     console.log("Your transaction signature", tx);
