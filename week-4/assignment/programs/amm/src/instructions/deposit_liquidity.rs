@@ -176,28 +176,28 @@ pub struct DepositLiquidity<'info> {
         associated_token::mint = mint_a,
         associated_token::authority = pool_authority,
     )]
-    pool_account_a: Account<'info, TokenAccount>,
+    pool_account_a: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         associated_token::mint = mint_b,
         associated_token::authority = pool_authority,
     )]
-    pool_account_b: Account<'info, TokenAccount>,
+    pool_account_b: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         associated_token::mint = mint_a,
         associated_token::authority = depositor,
     )]
-    depositor_account_a: Account<'info, TokenAccount>,
+    depositor_account_a: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         associated_token::mint = mint_b,
         associated_token::authority = depositor,
     )]
-    depositor_account_b: Account<'info, TokenAccount>,
+    depositor_account_b: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -205,7 +205,7 @@ pub struct DepositLiquidity<'info> {
         associated_token::mint = mint_liquidity,
         associated_token::authority = depositor,
     )]
-    depositor_account_liquidity: Account<'info, TokenAccount>,
+    depositor_account_liquidity: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     depositor: Signer<'info>,

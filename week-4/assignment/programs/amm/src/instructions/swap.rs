@@ -136,28 +136,28 @@ pub struct Swap<'info> {
         associated_token::mint = mint_a,
         associated_token::authority = pool_authority,
     )]
-    pool_account_a: Account<'info, TokenAccount>,
+    pool_account_a: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         associated_token::mint = mint_b,
         associated_token::authority = pool_authority,
     )]
-    pool_account_b: Account<'info, TokenAccount>,
+    pool_account_b: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         associated_token::mint = mint_a,
         associated_token::authority = trader,
     )]
-    trader_account_a: Account<'info, TokenAccount>,
+    trader_account_a: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         associated_token::mint = mint_b,
         associated_token::authority = trader,
     )]
-    trader_account_b: Account<'info, TokenAccount>,
+    trader_account_b: Box<Account<'info, TokenAccount>>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,

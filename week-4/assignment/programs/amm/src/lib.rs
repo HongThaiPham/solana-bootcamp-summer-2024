@@ -4,7 +4,7 @@ mod errors;
 mod instructions;
 mod state;
 
-declare_id!("8QNTeqVq25xDKycxbcyKQPXQShcGLhatWwiZ6MqJQ1we");
+declare_id!("6NAYr9BDQ4Zjo9mRkBBtibijVJ2ti5nRR8Z8whaYvUBr");
 
 #[program]
 pub mod amm {
@@ -15,7 +15,7 @@ pub mod amm {
     pub fn create_amm(ctx: Context<CreateAmm>, id: Pubkey, fee: u16) -> Result<()> {
         instructions::create_amm(ctx, id, fee)
     }
-
+    #[inline(never)]
     pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
         instructions::create_pool(ctx)
     }
