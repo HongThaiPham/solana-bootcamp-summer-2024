@@ -4,14 +4,15 @@ mod errors;
 mod instructions;
 mod state;
 
-declare_id!("6NAYr9BDQ4Zjo9mRkBBtibijVJ2ti5nRR8Z8whaYvUBr");
+use instructions::*;
+
+declare_id!("3QP6RBAEv8hkeoM5adYgkSrthEyanYRw1CeQZgFi2rcF");
 
 #[program]
 pub mod amm {
-    pub use super::instructions::*;
 
     use super::*;
-
+    #[inline(never)]
     pub fn create_amm(ctx: Context<CreateAmm>, id: Pubkey, fee: u16) -> Result<()> {
         instructions::create_amm(ctx, id, fee)
     }
@@ -19,7 +20,7 @@ pub mod amm {
     pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
         instructions::create_pool(ctx)
     }
-
+    #[inline(never)]
     pub fn deposit_liquidity(
         ctx: Context<DepositLiquidity>,
         amount_a: u64,
@@ -27,11 +28,11 @@ pub mod amm {
     ) -> Result<()> {
         instructions::deposit_liquidity(ctx, amount_a, amount_b)
     }
-
+    #[inline(never)]
     pub fn withdraw_liquidity(ctx: Context<WithdrawLiquidity>, amount: u64) -> Result<()> {
         instructions::withdraw_liquidity(ctx, amount)
     }
-
+    #[inline(never)]
     pub fn swap(
         ctx: Context<Swap>,
         swap_a: bool,

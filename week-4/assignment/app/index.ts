@@ -17,6 +17,7 @@ import {
 } from "@solana/spl-token";
 
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
+import { PublicKey } from "@solana/web3.js";
 
 const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -28,7 +29,7 @@ const TRADER_WALLET = web3.Keypair.fromSecretKey(
   new Uint8Array(bs58.decode(process.env.MY_TEST_TRADER!))
 );
 const PROGRAM_ID = new web3.PublicKey(
-  "6NAYr9BDQ4Zjo9mRkBBtibijVJ2ti5nRR8Z8whaYvUBr"
+  "3QP6RBAEv8hkeoM5adYgkSrthEyanYRw1CeQZgFi2rcF"
 );
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"));
 const signer = new Wallet(SIGNER_WALLET);
@@ -41,45 +42,46 @@ const program = new Program(idl as unknown as Amm, PROGRAM_ID, provider);
 let fee = 100;
 let tx;
 async function main() {
-  console.info("Creating new token A and token B");
   const depositor = SIGNER_WALLET;
-  const mintAKp = await createNewToken();
-  delay(1000);
-  const mintBKp = await createNewToken();
-  delay(1000);
-  await getOrCreateAssociatedTokenAccount(
-    provider.connection,
-    TRADER_WALLET,
-    mintAKp.address,
-    TRADER_WALLET.publicKey
-  );
-  delay(1000);
-  await mintTo(
-    provider.connection,
-    depositor,
-    mintAKp.address,
-    getAssociatedTokenAddressSync(mintAKp.address, TRADER_WALLET.publicKey),
-    depositor,
-    10000 * 10 ** mintAKp.decimals
-  );
-  delay(1000);
-  await getOrCreateAssociatedTokenAccount(
-    provider.connection,
-    TRADER_WALLET,
-    mintBKp.address,
-    TRADER_WALLET.publicKey
-  );
-  delay(1000);
-  await mintTo(
-    provider.connection,
-    depositor,
-    mintBKp.address,
-    getAssociatedTokenAddressSync(mintBKp.address, TRADER_WALLET.publicKey),
-    depositor,
-    20000 * 10 ** mintBKp.decimals
-  );
-  delay(1000);
-  console.info("Creating AMM and Pool");
+  // console.info("Creating new token A and token B");
+
+  // const mintAKp = await createNewToken();
+  // await delay(1000);
+  // const mintBKp = await createNewToken();
+  // await delay(1000);
+  // await getOrCreateAssociatedTokenAccount(
+  //   provider.connection,
+  //   TRADER_WALLET,
+  //   mintAKp.address,
+  //   TRADER_WALLET.publicKey
+  // );
+  // await delay(1000);
+  // await mintTo(
+  //   provider.connection,
+  //   depositor,
+  //   mintAKp.address,
+  //   getAssociatedTokenAddressSync(mintAKp.address, TRADER_WALLET.publicKey),
+  //   depositor,
+  //   10000 * 10 ** mintAKp.decimals
+  // );
+  // await delay(1000);
+  // await getOrCreateAssociatedTokenAccount(
+  //   provider.connection,
+  //   TRADER_WALLET,
+  //   mintBKp.address,
+  //   TRADER_WALLET.publicKey
+  // );
+  // await delay(1000);
+  // await mintTo(
+  //   provider.connection,
+  //   depositor,
+  //   mintBKp.address,
+  //   getAssociatedTokenAddressSync(mintBKp.address, TRADER_WALLET.publicKey),
+  //   depositor,
+  //   20000 * 10 ** mintBKp.decimals
+  // );
+  // await delay(1000);
+  // console.info("Creating AMM and Pool");
 
   const id = web3.Keypair.generate().publicKey;
 
@@ -98,6 +100,18 @@ async function main() {
     .rpc();
 
   console.log("Create AMM success signature", createAmmTx);
+
+  const mintAKp = await getMint(
+    connection,
+    new PublicKey("oqR6JUWzJhu7aasNAL9i5pBBcsUuRvp1jPAyej2xJnG")
+  );
+
+  const mintBKp = await getMint(
+    connection,
+    new PublicKey("FNWWfoFobHDfbTevr4SfnaFgkVEWM7rvc7Wf6FcAuwnp")
+  );
+
+  // const ammPda = new PublicKey("Hm37XaziCQSDxodL8amwxAYuCpdNCaSSHiP3uL18Y3cx");
 
   const [poolPda] = web3.PublicKey.findProgramAddressSync(
     [ammPda.toBuffer(), mintAKp.address.toBuffer(), mintBKp.address.toBuffer()],
@@ -136,7 +150,7 @@ async function main() {
     true
   );
 
-  delay(3000);
+  await delay(3000);
 
   console.info("Creating pool");
 
@@ -151,11 +165,12 @@ async function main() {
       mintB: mintBKp.address,
       poolAccountA: poolAccountA,
       poolAccountB: poolAccountB,
-      payer: provider.publicKey,
+      payer: depositor.publicKey,
       tokenProgram: TOKEN_PROGRAM_ID,
       associatedTokenProgram: ASSOCIATED_PROGRAM_ID,
       systemProgram: web3.SystemProgram.programId,
     })
+    .signers([depositor])
     .rpc();
 
   console.log("Create pool success signature", createPoolTx);
@@ -195,7 +210,7 @@ async function main() {
     TRADER_WALLET.publicKey,
     false
   );
-  delay(3000);
+  await delay(3000);
   console.info("Depositing liquidity");
 
   const amountA = new BN(100 * 10 ** mintAKp.decimals);
@@ -225,7 +240,7 @@ async function main() {
 
   console.log("Your transaction signature", tx);
 
-  delay(5000);
+  await delay(5000);
   console.info("Swapping tokens A to B");
 
   const swapAmountA = new BN(10 * 10 ** mintAKp.decimals);
@@ -257,7 +272,7 @@ async function main() {
 
   console.log("Your transaction signature", tx);
 
-  delay(5000);
+  await delay(5000);
   console.info("Swapping tokens B to A");
 
   const swapAmountB = new BN(10 * 10 ** mintBKp.decimals);
@@ -289,7 +304,7 @@ async function main() {
 
   console.log("Your transaction signature", tx);
 
-  delay(5000);
+  await delay(5000);
   console.info("Withdrawing liquidity");
 
   const depisitorLP = await getAccount(provider.connection, depisitorLPAccount);
